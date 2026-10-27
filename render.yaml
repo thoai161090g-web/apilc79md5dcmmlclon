@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: auza-lc79-md5-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: TELE68_AT
+        sync: false
+      - key: APP_TIMEZONE
+        value: Asia/Ho_Chi_Minh
