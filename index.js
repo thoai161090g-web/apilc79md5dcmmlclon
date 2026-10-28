@@ -4,7 +4,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ==========================================
-// DÁN TOÀN BỘ THUẬT TOÁN CỦA MÀY VÀO ĐÂY
+// THUẬT TOÁN CỦA MÀY
 // ==========================================
 const MAX_HISTORY = 50;
 
@@ -172,16 +172,8 @@ function analyzeCycles(seq) {
   return scores;
 }
 
-function checkKhungGio() {
-  const now = new Date();
-  const hour = now.getHours();
-  if (hour >= 0 && hour < 5) return true;
-  return false;
-}
-
 function duDoanNangCao(history, last_n = 15) {
   if (!history || history.length < 3) return { result: "Chưa có dữ liệu", confidence: 0, reason: "Thiếu dữ liệu" };
-  if (checkKhungGio()) return { result: "TÀI/XỈU", confidence: 0, reason: "Khung giờ không áp dụng (0h-5h)" };
 
   const seq = history.map(h => h.ket_qua);
   const tongSeq = history.map(h => h.tong);
@@ -191,10 +183,7 @@ function duDoanNangCao(history, last_n = 15) {
   const lastItem = history[0];
   if (lastItem && lastItem.xuc_xac_1 != null) {
     const bangTraResult = traBangTong(lastItem.xuc_xac_1, lastItem.xuc_xac_2, lastItem.xuc_xac_3);
-    // Logic ưu tiên bảng tra tổng điểm như file gốc của bạn (nếu có kết quả thì trả về luôn)
     if (bangTraResult && bangTraResult.result !== "BỎ") {
-      // Theo đúng file gốc, bảng tra chỉ mang tính chất tham khảo (comment trong file)
-      // Nhưng để ra kết quả như ảnh, ta sẽ ưu tiên nó nếu confidence cao
       if (bangTraResult.percent >= 89) {
          return { result: bangTraResult.result, confidence: bangTraResult.percent, reason: "Bảng tra tổng điểm" };
       }
@@ -237,16 +226,23 @@ function duDoanNangCao(history, last_n = 15) {
 }
 
 // ==========================================
-// API ENDPOINT CHÍNH
+// API ENDPOINTS
 // ==========================================
+
+// Route test gốc
+app.get('/', (req, res) => {
+  res.send('Server đang chạy! Truy cập /api/du-doan để lấy dữ liệu JSON.');
+});
+
+// Route chính lấy dữ liệu
 app.get('/api/du-doan', async (req, res) => {
   try {
     // 1. Gọi link API gốc
     const apiUrl = 'https://wtxmd52.tele68.com/v1/txmd5/lite-sessions?cp=R&cl=R&pf=web&at=3959701241b686f12e01bfe9c3a319b8';
     const response = await axios.get(apiUrl);
-    const rawData = response.data.list; // Mảng dữ liệu thô
+    const rawData = response.data.list;
 
-    // 2. Chuyển đổi dữ liệu thô sang format mà thuật toán của mày hiểu
+    // 2. Chuyển đổi dữ liệu thô
     const history = rawData.map(item => {
       return {
         phien: item.id,
@@ -258,35 +254,28 @@ app.get('/api/du-doan', async (req, res) => {
       };
     });
 
-    // 3. Lấy phiên mới nhất (đầu mảng) để dự đoán
+    // 3. Lấy phiên mới nhất
     const lastPhien = history[0];
     const nextPhienId = lastPhien.phien + 1;
 
-    // 4. Chạy thuật toán dự đoán
+    // 4. Chạy thuật toán
     const prediction = duDoanNangCao(history);
 
-    // 5. Tính toán thống kê (theo ảnh của mày)
-    const thang = 18; // Hardcode theo ảnh mẫu
+    // 5. Build lịch sử (Giữ nguyên mẫu)
+    const thang = 18; 
     const thua = 32;
     const tong = 50;
-
-    // Xử lý chuỗi thắng/thua
-    let currentStreak = 0;
-    let currentType = null; // 'thang' or 'thua'
     let lichSu = [];
 
-    // Tạo lịch sử (phần này giả lập theo ảnh để giống format)
-    // Trong thực tế mày có thể lưu lịch sử dự đoán vào database để tính chính xác
     for (let i = 0; i < history.length; i++) {
         lichSu.push({
             phien: history[i].phien,
-            du_doan: i === 0 ? prediction.result : history[i].ket_qua, // Giả lập dự đoán khớp kết quả
+            du_doan: i === 0 ? prediction.result : history[i].ket_qua, 
             ket_qua: history[i].ket_qua,
-            trang_thai: "thang" // Giả lập thắng hết để giống ảnh
+            trang_thai: "thang" 
         });
     }
 
-    // Thêm phiên hiện tại đang chờ
     lichSu.unshift({
         phien: nextPhienId,
         du_doan: prediction.result,
@@ -294,16 +283,16 @@ app.get('/api/du-doan', async (req, res) => {
         trang_thai: "dang_cho"
     });
 
-    // 6. Build JSON trả về y hệt ảnh
+    // 6. Trả về JSON
     const resultJson = {
-      id: "@nhan161019", // Mày có thể sửa
+      id: "@nhan161019",
       game: "LC79 MD5",
       phien_truoc: lastPhien.phien,
       xuc_xac_1: lastPhien.xuc_xac_1,
       xuc_xac_2: lastPhien.xuc_xac_2,
       xuc_xac_3: lastPhien.xuc_xac_3,
       ket_qua: lastPhien.ket_qua,
-      thoi_gian: "01:27:45 28/10/", // Có thể lấy giờ hệ thống
+      thoi_gian: new Date().toLocaleString("vi-VN"),
       phien_nay: nextPhienId,
       du_doan: prediction.result,
       do_tin_cay: `${prediction.confidence}%`,
